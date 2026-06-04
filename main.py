@@ -84,17 +84,48 @@ def create_task(
     return {"ok": True, "task": d(row)}
 
 @app.get("/tasks/active")
-def active_task(api_key: str, tablet_id: str = "tablet-1"):
+def active_task(api_key: str, tablet_id: str = "tablet-1", zone: str = ""):
     check_key(api_key)
     conn = db()
-    row = conn.execute("""
-        SELECT * FROM tasks
-        WHERE status IN ('NECITIT','VAZUT','IN_LUCRU')
-        ORDER BY CASE priority WHEN 'URGENT' THEN 1 WHEN 'IMPORTANT' THEN 2 ELSE 3 END, id DESC
-        LIMIT 1
-    """).fetchone()
+    if zone and zone.lower() not in ["toate", "all", "tablet-1"]:
+        row = conn.execute("""
+            SELECT * FROM tasks
+            WHERE status IN ('NECITIT','VAZUT','IN_LUCRU')
+            AND (worker=? OR worker='Toate' OR worker='' OR worker IS NULL)
+            ORDER BY CASE priority WHEN 'URGENT' THEN 1 WHEN 'IMPORTANT' THEN 2 ELSE 3 END, id DESC
+            LIMIT 1
+        """, (zone,)).fetchone()
+    else:
+        row = conn.execute("""
+            SELECT * FROM tasks
+            WHERE status IN ('NECITIT','VAZUT','IN_LUCRU')
+            ORDER BY CASE priority WHEN 'URGENT' THEN 1 WHEN 'IMPORTANT' THEN 2 ELSE 3 END, id DESC
+            LIMIT 1
+        """).fetchone()
     conn.close()
     return {"task": d(row)}
+
+@app.get("/tasks/open")
+def open_tasks(api_key: str, zone: str = "", limit: int = 20):
+    check_key(api_key)
+    conn = db()
+    if zone and zone.lower() not in ["toate", "all", "tablet-1"]:
+        rows = conn.execute("""
+            SELECT * FROM tasks
+            WHERE status IN ('NECITIT','VAZUT','IN_LUCRU')
+            AND (worker=? OR worker='Toate' OR worker='' OR worker IS NULL)
+            ORDER BY CASE priority WHEN 'URGENT' THEN 1 WHEN 'IMPORTANT' THEN 2 ELSE 3 END, id DESC
+            LIMIT ?
+        """, (zone, limit)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT * FROM tasks
+            WHERE status IN ('NECITIT','VAZUT','IN_LUCRU')
+            ORDER BY CASE priority WHEN 'URGENT' THEN 1 WHEN 'IMPORTANT' THEN 2 ELSE 3 END, id DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    conn.close()
+    return {"tasks": [d(r) for r in rows]}
 
 @app.get("/tasks")
 def list_tasks(api_key: str, limit: int = 100):
